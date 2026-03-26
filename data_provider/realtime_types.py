@@ -199,10 +199,16 @@ class ChipDistribution:
     cost_70_low: float = 0.0      # 70%筹码成本下限
     cost_70_high: float = 0.0     # 70%筹码成本上限
     concentration_70: float = 0.0  # 70%筹码集中度
-    
+
+    # US/HK market proxy fields (yfinance)
+    short_ratio: Optional[float] = None             # Days to cover
+    short_percent_of_float: Optional[float] = None  # Short % of float
+    institution_percent_held: Optional[float] = None
+    insider_percent_held: Optional[float] = None
+
     def to_dict(self) -> Dict[str, Any]:
         """转换为字典"""
-        return {
+        d = {
             'code': self.code,
             'date': self.date,
             'source': self.source,
@@ -213,6 +219,15 @@ class ChipDistribution:
             'concentration_90': self.concentration_90,
             'concentration_70': self.concentration_70,
         }
+        if self.short_ratio is not None:
+            d['short_ratio'] = self.short_ratio
+        if self.short_percent_of_float is not None:
+            d['short_percent_of_float'] = self.short_percent_of_float
+        if self.institution_percent_held is not None:
+            d['institution_percent_held'] = self.institution_percent_held
+        if self.insider_percent_held is not None:
+            d['insider_percent_held'] = self.insider_percent_held
+        return d
     
     def get_chip_status(self, current_price: float) -> str:
         """

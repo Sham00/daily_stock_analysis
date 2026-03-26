@@ -290,7 +290,7 @@ def _handle_get_chip_distribution(stock_code: str) -> dict:
     if chip is None:
         return {"error": f"No chip distribution data available for {stock_code}"}
 
-    return {
+    result = {
         "code": chip.code,
         "date": chip.date,
         "source": chip.source,
@@ -303,6 +303,12 @@ def _handle_get_chip_distribution(stock_code: str) -> dict:
         "cost_70_high": chip.cost_70_high,
         "concentration_70": chip.concentration_70,
     }
+    # US/HK proxy fields from yfinance
+    for field in ("short_ratio", "short_percent_of_float", "institution_percent_held", "insider_percent_held"):
+        v = getattr(chip, field, None)
+        if v is not None:
+            result[field] = v
+    return result
 
 
 get_chip_distribution_tool = ToolDefinition(

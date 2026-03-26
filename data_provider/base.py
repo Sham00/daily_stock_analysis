@@ -1217,7 +1217,7 @@ class DataFetcherManager:
         # Normalize code (strip SH/SZ prefix etc.)
         stock_code = normalize_stock_code(stock_code)
 
-        from .realtime_types import get_chip_circuit_breaker
+        from .realtime_types import get_chip_circuit_breaker, ChipDistribution
         from src.config import get_config
 
         config = get_config()
@@ -1226,6 +1226,33 @@ class DataFetcherManager:
         if not config.enable_chip_distribution:
             logger.debug(f"[筹码分布] 功能已禁用，跳过 {stock_code}")
             return None
+
+        # For US/HK stocks, use yfinance short interest / institutional data as proxy
+        if _market_tag(stock_code) in {"us", "hk"}:
+            try:
+                import yfinance as yf  # type: ignore
+                ticker = yf.Ticker(stock_code)
+                info = ticker.info or {}
+
+                def _f(k):
+                    v = info.get(k)
+                    return float(v) if v is not None else None
+
+                chip = ChipDistribution(
+                    code=stock_code,
+                    date="",
+                    source="yfinance",
+                    short_ratio=_f("shortRatio"),
+                    short_percent_of_float=_f("shortPercentOfFloat"),
+                    institution_percent_held=_f("institutionsPercentHeld"),
+                    insider_percent_held=_f("insidersPercentHeld"),
+                )
+                logger.info(f"[筹码分布] {stock_code} yfinance short/institution proxy: "
+                            f"short_ratio={chip.short_ratio}, institution={chip.institution_percent_held}")
+                return chip
+            except Exception as e:
+                logger.warning(f"[筹码分布] {stock_code} yfinance fallback failed: {e}")
+                return None
 
         circuit_breaker = get_chip_circuit_breaker()
 
