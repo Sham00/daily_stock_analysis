@@ -681,11 +681,11 @@ class Config:
     # 全局总开关；关闭时返回 not_supported 并保持主流程无变化
     enable_fundamental_pipeline: bool = True
     # 基本面阶段总预算（秒）
-    fundamental_stage_timeout_seconds: float = 1.5
+    fundamental_stage_timeout_seconds: float = 4.0
     # 单能力源调用超时（秒）
-    fundamental_fetch_timeout_seconds: float = 0.8
+    fundamental_fetch_timeout_seconds: float = 2.0
     # 单能力失败重试次数（已包含首次）
-    fundamental_retry_max: int = 1
+    fundamental_retry_max: int = 2
     # 基本面上下文短 TTL（秒）
     fundamental_cache_ttl_seconds: int = 120
     # 基本面缓存最大条目数（避免长时间运行内存增长）

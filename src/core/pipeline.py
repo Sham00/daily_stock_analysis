@@ -85,6 +85,8 @@ class StockAnalysisPipeline:
         self.fetcher_manager = DataFetcherManager()
         # 不再单独创建 akshare_fetcher，统一使用 fetcher_manager 获取增强数据
         self.trend_analyzer = StockTrendAnalyzer()  # 趋势分析器
+        # 实时行情 last-known-good 缓存：{code: (quote, ts)}
+        self._realtime_quote_cache: Dict[str, Any] = {}
         self.analyzer = GeminiAnalyzer()
         self.notifier = NotificationService(source_message=source_message)
         
@@ -205,10 +207,29 @@ class StockAnalysisPipeline:
             stock_name = self.fetcher_manager.get_stock_name(code)
 
             # Step 1: 获取实时行情（量比、换手率等）- 使用统一入口，自动故障切换
+            # 2 retries with 0.5s backoff; fall back to 60s cached quote on all failures.
             realtime_quote = None
+            _REALTIME_RETRY_COUNT = 2
+            _REALTIME_RETRY_BACKOFF = 0.5
+            _REALTIME_CACHE_TTL = 60
             try:
-                realtime_quote = self.fetcher_manager.get_realtime_quote(code)
-                if realtime_quote:
+                last_exc = None
+                for _attempt in range(_REALTIME_RETRY_COUNT):
+                    try:
+                        realtime_quote = self.fetcher_manager.get_realtime_quote(code)
+                        if realtime_quote is not None:
+                            break
+                    except Exception as _e:
+                        last_exc = _e
+                        logger.info(f"{stock_name}({code}) 实时行情第{_attempt + 1}次获取失败: {_e}，重试中")
+                        if _attempt < _REALTIME_RETRY_COUNT - 1:
+                            time.sleep(_REALTIME_RETRY_BACKOFF)
+                if realtime_quote is None and last_exc is None:
+                    # Succeeded without exception but returned None — check cache
+                    pass
+                if realtime_quote is not None:
+                    # Store last-known-good
+                    self._realtime_quote_cache[code] = (realtime_quote, time.time())
                     # 使用实时行情返回的真实股票名称
                     if realtime_quote.name:
                         stock_name = realtime_quote.name
@@ -219,7 +240,17 @@ class StockAnalysisPipeline:
                               f"量比={volume_ratio}, 换手率={turnover_rate}% "
                               f"(来源: {realtime_quote.source.value if hasattr(realtime_quote, 'source') else 'unknown'})")
                 else:
-                    logger.info(f"{stock_name}({code}) 实时行情获取失败或已禁用，将使用历史数据进行分析")
+                    # Try 60s cache fallback
+                    cached = self._realtime_quote_cache.get(code)
+                    if cached is not None:
+                        cached_quote, cached_ts = cached
+                        if time.time() - cached_ts <= _REALTIME_CACHE_TTL:
+                            realtime_quote = cached_quote
+                            logger.info(f"{stock_name}({code}) 实时行情使用缓存数据 (age={int(time.time() - cached_ts)}s)")
+                        else:
+                            logger.info(f"{stock_name}({code}) 实时行情获取失败，缓存已过期，将使用历史数据进行分析")
+                    else:
+                        logger.info(f"{stock_name}({code}) 实时行情获取失败或已禁用，将使用历史数据进行分析")
             except Exception as e:
                 logger.warning(f"{stock_name}({code}) 获取实时行情失败: {e}")
 
@@ -235,7 +266,7 @@ class StockAnalysisPipeline:
                     logger.info(f"{stock_name}({code}) 筹码分布: 获利比例={chip_data.profit_ratio:.1%}, "
                               f"90%集中度={chip_data.concentration_90:.2%}")
                 else:
-                    logger.debug(f"{stock_name}({code}) 筹码分布获取失败或已禁用")
+                    logger.info(f"{stock_name}({code}) 筹码分布获取失败或已禁用")
             except Exception as e:
                 logger.warning(f"{stock_name}({code}) 获取筹码分布失败: {e}")
 

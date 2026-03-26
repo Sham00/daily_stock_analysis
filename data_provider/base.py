@@ -1667,6 +1667,77 @@ class DataFetcherManager:
                 return True
         return False
 
+    def _get_yfinance_fundamental_context(self, stock_code: str, market: str) -> Dict[str, Any]:
+        """Build a fundamental context for US/HK stocks using yfinance."""
+        import time as _time
+        _t0 = _time.time()
+        _ns = [{"provider": "yfinance", "result": "ok", "duration_ms": 0}]
+        _err: List[str] = []
+        try:
+            import yfinance as yf  # type: ignore
+            ticker = yf.Ticker(stock_code)
+            info = ticker.info or {}
+
+            def _f(key: str):
+                v = info.get(key)
+                return float(v) if v is not None else None
+
+            valuation_data = {
+                "pe_ratio": _f("trailingPE"),
+                "pb_ratio": _f("priceToBook"),
+                "market_cap": _f("marketCap"),
+                "forward_eps": _f("forwardEPS"),
+                "week_52_high": _f("fiftyTwoWeekHigh"),
+                "week_52_low": _f("fiftyTwoWeekLow"),
+            }
+            earnings_data = {
+                "dividend": {
+                    "ttm_dividend_yield_pct": round(_f("dividendYield") * 100, 4) if _f("dividendYield") is not None else None,
+                    "forward_eps": _f("forwardEPS"),
+                }
+            }
+            institution_data = {
+                "institution_percent_held": _f("institutionsPercentHeld"),
+                "insider_percent_held": _f("insidersPercentHeld"),
+                "short_ratio": _f("shortRatio"),
+                "short_percent_of_float": _f("shortPercentOfFloat"),
+            }
+
+            duration_ms = int((_time.time() - _t0) * 1000)
+            chain = [{"provider": "yfinance", "result": "ok", "duration_ms": duration_ms}]
+
+            def _blk(data):
+                st = "ok" if self._has_meaningful_payload(data) else "not_supported"
+                return self._build_fundamental_block(st, data, chain, [])
+
+            ns_blk = self._build_fundamental_block(
+                "not_supported", {}, chain, ["not applicable for us/hk"]
+            )
+            ctx = {
+                "market": market,
+                "valuation": _blk(valuation_data),
+                "growth": ns_blk,
+                "earnings": _blk(earnings_data),
+                "institution": _blk(institution_data),
+                "capital_flow": ns_blk,
+                "dragon_tiger": ns_blk,
+                "boards": ns_blk,
+                "source_chain": chain,
+                "errors": [],
+                "elapsed_ms": duration_ms,
+            }
+            block_statuses = {k: ctx[k].get("status", "not_supported") for k in
+                              ("valuation", "growth", "earnings", "institution",
+                               "capital_flow", "dragon_tiger", "boards")}
+            ctx["coverage"] = block_statuses
+            any_ok = any(v == "ok" for v in block_statuses.values())
+            ctx["status"] = "partial" if any_ok else "not_supported"
+            logger.info(f"[基本面] {stock_code} yfinance 获取成功 (耗时 {duration_ms}ms)")
+            return ctx
+        except Exception as e:
+            logger.warning(f"[基本面] {stock_code} yfinance 获取失败: {e}")
+            return self._build_market_not_supported(market=market, reason=f"yfinance failed: {e}")
+
     def _build_market_not_supported(self, market: str, reason: str) -> Dict[str, Any]:
         blocks = {
             "valuation": self._build_fundamental_block(
@@ -1774,10 +1845,7 @@ class DataFetcherManager:
         market = _market_tag(stock_code)
         is_etf = _is_etf_code(stock_code)
         if market in {"us", "hk"}:
-            return self._build_market_not_supported(
-                market=market,
-                reason="market not supported",
-            )
+            return self._get_yfinance_fundamental_context(stock_code, market)
 
         stage_timeout = float(
             budget_seconds if budget_seconds is not None else config.fundamental_stage_timeout_seconds
