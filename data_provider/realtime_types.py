@@ -186,6 +186,7 @@ class ChipDistribution:
     code: str
     date: str = ""
     source: str = "akshare"
+    market: str = "cn"  # "cn", "us", or "hk" — gates CN-specific chip fields
     
     # 获利情况
     profit_ratio: float = 0.0     # 获利比例(0-1)

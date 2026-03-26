@@ -519,13 +519,29 @@ class StockAnalysisPipeline:
         # 添加筹码分布
         if chip_data:
             current_price = getattr(realtime_quote, 'price', 0) if realtime_quote else 0
-            enhanced['chip'] = {
-                'profit_ratio': chip_data.profit_ratio,
-                'avg_cost': chip_data.avg_cost,
-                'concentration_90': chip_data.concentration_90,
-                'concentration_70': chip_data.concentration_70,
-                'chip_status': chip_data.get_chip_status(current_price or 0),
-            }
+            chip_market = getattr(chip_data, 'market', 'cn')
+            if chip_market in ('us', 'hk'):
+                # CN-specific cost/concentration fields are meaningless for US/HK stocks;
+                # expose only the yfinance proxy fields so the AI sees accurate data.
+                proxy = {
+                    k: v for k, v in {
+                        'market': chip_market,
+                        'short_ratio': chip_data.short_ratio,
+                        'short_percent_of_float': chip_data.short_percent_of_float,
+                        'institution_percent_held': chip_data.institution_percent_held,
+                        'insider_percent_held': chip_data.insider_percent_held,
+                    }.items() if v is not None
+                }
+                if proxy:
+                    enhanced['chip'] = proxy
+            else:
+                enhanced['chip'] = {
+                    'profit_ratio': chip_data.profit_ratio,
+                    'avg_cost': chip_data.avg_cost,
+                    'concentration_90': chip_data.concentration_90,
+                    'concentration_70': chip_data.concentration_70,
+                    'chip_status': chip_data.get_chip_status(current_price or 0),
+                }
         
         # 添加趋势分析结果
         if trend_result:

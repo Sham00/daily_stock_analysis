@@ -182,6 +182,9 @@ def fill_chip_structure_if_needed(result: "AnalysisResult", chip_data: Any) -> N
     """When chip_data exists, fill chip_structure placeholder fields from chip_data (in-place)."""
     if not result or not chip_data:
         return
+    # CN-specific chip structure fields are not meaningful for US/HK yfinance proxy data
+    if getattr(chip_data, 'market', 'cn') in ('us', 'hk'):
+        return
     try:
         if not result.dashboard:
             result.dashboard = {}

@@ -163,6 +163,60 @@ def _market_tag(code: str) -> str:
     return "cn"
 
 
+def _to_yf_code(stock_code: str) -> str:
+    """Convert a normalized stock code to Yahoo Finance symbol format.
+
+    - HK: HK00700 -> 0700.HK
+    - US: AAPL -> AAPL (pass through)
+    - CN codes are not expected here; returned as-is.
+    """
+    code = stock_code.strip().upper()
+    if code.startswith("HK"):
+        digits = code[2:]
+        if digits.isdigit():
+            hk_num = digits.lstrip("0") or "0"
+            return f"{hk_num.zfill(4)}.HK"
+    return code
+
+
+# Module-level cache for yfinance ticker.info to avoid duplicate HTTP calls
+# within the same pipeline run. Key: (yf_code, 5-minute bucket).
+_yf_info_cache: Dict[Tuple[str, int], Dict[str, Any]] = {}
+
+
+def _get_yf_info(stock_code: str, timeout: int = 5) -> Dict[str, Any]:
+    """Fetch yfinance ticker.info with a timeout and a 5-minute TTL cache.
+
+    Returns an empty dict on timeout or any error so callers can safely
+    call .get() without guards.
+    """
+    import concurrent.futures
+    import yfinance as yf  # type: ignore
+
+    yf_code = _to_yf_code(stock_code)
+    bucket = int(time.time() // 300)
+    cache_key = (yf_code, bucket)
+    if cache_key in _yf_info_cache:
+        return _yf_info_cache[cache_key]
+
+    def _fetch() -> Dict[str, Any]:
+        return yf.Ticker(yf_code).info or {}
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(_fetch)
+        try:
+            info = future.result(timeout=timeout)
+        except concurrent.futures.TimeoutError:
+            logger.warning(f"[yfinance] {yf_code} ticker.info timed out after {timeout}s")
+            return {}
+        except Exception as e:
+            logger.warning(f"[yfinance] {yf_code} ticker.info failed: {e}")
+            return {}
+
+    _yf_info_cache[cache_key] = info
+    return info
+
+
 def is_bse_code(code: str) -> bool:
     """
     Check if the code is a Beijing Stock Exchange (BSE) A-share code.
@@ -1228,20 +1282,25 @@ class DataFetcherManager:
             return None
 
         # For US/HK stocks, use yfinance short interest / institutional data as proxy
-        if _market_tag(stock_code) in {"us", "hk"}:
+        mkt = _market_tag(stock_code)
+        if mkt in {"us", "hk"}:
             try:
-                import yfinance as yf  # type: ignore
-                ticker = yf.Ticker(stock_code)
-                info = ticker.info or {}
+                info = _get_yf_info(stock_code)
 
                 def _f(k):
                     v = info.get(k)
-                    return float(v) if v is not None else None
+                    if v is None:
+                        return None
+                    try:
+                        return float(v)
+                    except (TypeError, ValueError):
+                        return None
 
                 chip = ChipDistribution(
                     code=stock_code,
                     date="",
                     source="yfinance",
+                    market=mkt,
                     short_ratio=_f("shortRatio"),
                     short_percent_of_float=_f("shortPercentOfFloat"),
                     institution_percent_held=_f("institutionsPercentHeld"),
@@ -1696,18 +1755,18 @@ class DataFetcherManager:
 
     def _get_yfinance_fundamental_context(self, stock_code: str, market: str) -> Dict[str, Any]:
         """Build a fundamental context for US/HK stocks using yfinance."""
-        import time as _time
-        _t0 = _time.time()
-        _ns = [{"provider": "yfinance", "result": "ok", "duration_ms": 0}]
-        _err: List[str] = []
+        _t0 = time.time()
         try:
-            import yfinance as yf  # type: ignore
-            ticker = yf.Ticker(stock_code)
-            info = ticker.info or {}
+            info = _get_yf_info(stock_code)
 
             def _f(key: str):
                 v = info.get(key)
-                return float(v) if v is not None else None
+                if v is None:
+                    return None
+                try:
+                    return float(v)
+                except (TypeError, ValueError):
+                    return None
 
             valuation_data = {
                 "pe_ratio": _f("trailingPE"),
@@ -1717,10 +1776,10 @@ class DataFetcherManager:
                 "week_52_high": _f("fiftyTwoWeekHigh"),
                 "week_52_low": _f("fiftyTwoWeekLow"),
             }
+            div_yield = _f("dividendYield")
             earnings_data = {
                 "dividend": {
-                    "ttm_dividend_yield_pct": round(_f("dividendYield") * 100, 4) if _f("dividendYield") is not None else None,
-                    "forward_eps": _f("forwardEPS"),
+                    "ttm_dividend_yield_pct": round(div_yield * 100, 4) if div_yield is not None else None,
                 }
             }
             institution_data = {
@@ -1730,7 +1789,7 @@ class DataFetcherManager:
                 "short_percent_of_float": _f("shortPercentOfFloat"),
             }
 
-            duration_ms = int((_time.time() - _t0) * 1000)
+            duration_ms = int((time.time() - _t0) * 1000)
             chain = [{"provider": "yfinance", "result": "ok", "duration_ms": duration_ms}]
 
             def _blk(data):
