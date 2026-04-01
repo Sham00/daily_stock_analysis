@@ -1170,8 +1170,23 @@ class GeminiAnalyzer:
         # 添加筹码分布数据
         if 'chip' in context:
             chip = context['chip']
-            profit_ratio = chip.get('profit_ratio', 0)
-            prompt += f"""
+            if chip.get('market') in ('us', 'hk'):
+                short_ratio = chip.get('short_ratio')
+                short_pof = chip.get('short_percent_of_float')
+                inst = chip.get('institution_percent_held')
+                insider = chip.get('insider_percent_held')
+                prompt += f"""
+### Ownership & Short Interest
+| Field | Value |
+|-------|-------|
+| **Short Ratio (days to cover)** | **{short_ratio if short_ratio is not None else 'N/A'}** |
+| Short % of Float | {f'{short_pof:.1%}' if short_pof is not None else 'N/A'} |
+| **Institutional Holdings** | **{f'{inst:.1%}' if inst is not None else 'N/A'}** |
+| Insider Holdings | {f'{insider:.1%}' if insider is not None else 'N/A'} |
+"""
+            else:
+                profit_ratio = chip.get('profit_ratio', 0)
+                prompt += f"""
 ### 筹码分布数据（效率指标）
 | 指标 | 数值 | 健康标准 |
 |------|------|----------|

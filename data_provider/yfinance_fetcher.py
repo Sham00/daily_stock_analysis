@@ -697,10 +697,17 @@ class YfinanceFetcher(BaseFetcher):
 
             # 获取股票名称
             try:
-                info_name = ticker.info.get('shortName', '') or ticker.info.get('longName', '') or ''
+                info_full = ticker.info
+                info_name = info_full.get('shortName', '') or info_full.get('longName', '') or ''
                 name = info_name if is_meaningful_stock_name(info_name, symbol) else STOCK_NAME_MAP.get(symbol, '')
+                _pe = info_full.get('trailingPE')
+                _pb = info_full.get('priceToBook')
+                pe_ratio = float(_pe) if _pe is not None else None
+                pb_ratio = float(_pb) if _pb is not None else None
             except Exception:
                 name = STOCK_NAME_MAP.get(symbol, '')
+                pe_ratio = None
+                pb_ratio = None
 
             quote = UnifiedRealtimeQuote(
                 code=symbol,
@@ -718,8 +725,8 @@ class YfinanceFetcher(BaseFetcher):
                 high=high,
                 low=low,
                 pre_close=prev_close,
-                pe_ratio=None,
-                pb_ratio=None,
+                pe_ratio=pe_ratio,
+                pb_ratio=pb_ratio,
                 total_mv=market_cap,
                 circ_mv=None,
             )
