@@ -55,7 +55,17 @@ jobs:
       - name: 创建必要目录
         run: |
           mkdir -p data logs reports
-      
+
+      - name: Prescan wildcard universe and build dynamic STOCK_LIST
+        env:
+          PORTFOLIO: "MSTR,B,FCX,AGMRF,CSCCF,BTC-USD"
+          WILDCARD_UNIVERSE: "AMD,AVGO,ARM,ANET,DELL,VRT,SMCI,PWR,ETN,DLR,AMT,CEG,VST,NRG,NEE,GEV,MARA,RIOT,CLSK,IREN,HUT,CORZ,NEM,MP,WPM,ET,TRGP,DVN,OXY,FANG"
+          WILDCARD_COUNT: "3"
+        run: |
+          DYNAMIC_LIST=$(python scripts/prescan.py)
+          echo "STOCK_LIST=$DYNAMIC_LIST" >> $GITHUB_ENV
+          echo "Prescan result: $DYNAMIC_LIST"
+
       - name: 执行股票分析
         env:
           # ==========================================
@@ -262,6 +272,19 @@ jobs:
             python main.py $FORCE_RUN_ARG
           fi
       
+      - name: Send trade tickets to Telegram
+        if: always()
+        env:
+          PORTFOLIO: "MSTR,B,FCX,AGMRF,CSCCF,BTC-USD"
+          WILDCARD_UNIVERSE: "AMD,AVGO,ARM,ANET,DELL,VRT,SMCI,PWR,ETN,DLR,AMT,CEG,VST,NRG,NEE,GEV,MARA,RIOT,CLSK,IREN,HUT,CORZ,NEM,MP,WPM,ET,TRGP,DVN,OXY,FANG"
+          WILDCARD_COUNT: "3"
+          PORTFOLIO_VALUE: "100000"
+          RISK_PER_TRADE_PCT: "0.5"
+          MAX_POSITION_PCT: "5.0"
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python scripts/trade_tickets.py
+
       - name: 上传分析报告
         uses: actions/upload-artifact@v6
         if: always()
