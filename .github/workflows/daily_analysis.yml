@@ -284,6 +284,21 @@ jobs:
           echo "REPORT_PAGE_URL=$REPORT_PAGE_URL" >> $GITHUB_ENV
           echo "Daily report page: $REPORT_PAGE_URL"
 
+      - name: Build X market intel (optional)
+        if: always()
+        env:
+          PORTFOLIO: "MSTR,B,FCX,AGMRF,CSCCF,BTC-USD"
+          X_API_BEARER_TOKEN: ${{ secrets.X_API_BEARER_TOKEN }}
+          X_API_MACRO_QUERY: ${{ vars.X_API_MACRO_QUERY || secrets.X_API_MACRO_QUERY || '(FOMC OR CPI OR PPI OR NFP OR yields OR treasury OR tariffs OR semis OR bitcoin) lang:en -is:retweet' }}
+          X_API_PORTFOLIO_LIMIT: ${{ vars.X_API_PORTFOLIO_LIMIT || secrets.X_API_PORTFOLIO_LIMIT || '4' }}
+          X_API_MAX_RESULTS: ${{ vars.X_API_MAX_RESULTS || secrets.X_API_MAX_RESULTS || '10' }}
+        run: |
+          if [ -n "$X_API_BEARER_TOKEN" ]; then
+            python scripts/x_market_intel.py
+          else
+            echo "X_API_BEARER_TOKEN not set, skipping X market intel"
+          fi
+
       - name: Send trade tickets to Telegram
         if: always()
         env:

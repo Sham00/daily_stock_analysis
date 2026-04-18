@@ -48,6 +48,10 @@ def _find_reports() -> list[ReportDoc]:
         docs.append(ReportDoc(title=f"Trade tickets ({path.stem.replace('trade_tickets_', '')})", path=path, body=_read(path), section="Trade tickets"))
         break
 
+    for path in sorted(REPORTS_DIR.glob("x_market_intel_*.md"), reverse=True):
+        docs.append(ReportDoc(title=f"X market intel ({path.stem.replace('x_market_intel_', '')})", path=path, body=_read(path), section="X market intel"))
+        break
+
     return docs
 
 
