@@ -28,6 +28,11 @@ concurrency:
   group: stock-analysis
   cancel-in-progress: false
 
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
 jobs:
   analyze:
     runs-on: ubuntu-latest
@@ -272,6 +277,13 @@ jobs:
             python main.py $FORCE_RUN_ARG
           fi
       
+      - name: Set daily report URL
+        if: always()
+        run: |
+          REPORT_PAGE_URL="https://${GITHUB_REPOSITORY_OWNER,,}.github.io/${GITHUB_REPOSITORY#*/}/daily/$(date -u +%Y-%m-%d)/"
+          echo "REPORT_PAGE_URL=$REPORT_PAGE_URL" >> $GITHUB_ENV
+          echo "Daily report page: $REPORT_PAGE_URL"
+
       - name: Send trade tickets to Telegram
         if: always()
         env:
@@ -281,9 +293,21 @@ jobs:
           PORTFOLIO_VALUE: "100000"
           RISK_PER_TRADE_PCT: "0.5"
           MAX_POSITION_PCT: "5.0"
+          REPORT_PAGE_URL: ${{ env.REPORT_PAGE_URL }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python scripts/trade_tickets.py
+
+      - name: Build static daily report site
+        if: always()
+        run: |
+          python scripts/build_daily_site.py
+
+      - name: Upload GitHub Pages artifact
+        if: always()
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
 
       - name: 上传分析报告
         uses: actions/upload-artifact@v6
@@ -313,3 +337,15 @@ jobs:
             echo "📜 最近日志（最后 30 行）:"
             tail -30 logs/stock_analysis_*.log 2>/dev/null || echo "无日志"
           fi
+
+  deploy-pages:
+    if: always()
+    needs: analyze
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

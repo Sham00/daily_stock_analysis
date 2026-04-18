@@ -19,6 +19,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import warnings
+from pathlib import Path
 warnings.filterwarnings("ignore")
 
 import pandas as pd
@@ -173,6 +174,7 @@ def _fmt_ticket(t: dict, idx: int) -> str:
 
 def build_report(tickets: list[dict], no_action: list[str], bench: list[str]) -> str:
     ts = datetime.now(ZoneInfo("America/Chicago")).strftime("%Y-%m-%d %H:%M %Z")
+    report_page_url = os.getenv("REPORT_PAGE_URL", "").strip()
     lines = [
         f"── TRADE TICKETS | {ts} ──",
         f"Portfolio: ${PORTFOLIO_VALUE:,.0f} | Risk/trade: {RISK_PCT:.2f}% | Max size: {MAX_POS_PCT:.2f}%",
@@ -195,6 +197,10 @@ def build_report(tickets: list[dict], no_action: list[str], bench: list[str]) ->
         lines.append("WILDCARD BENCH")
         for name in bench[:5]:
             lines.append(f"- {name}")
+        lines.append("")
+
+    if report_page_url:
+        lines.append(f"FULL REPORT: {report_page_url}")
         lines.append("")
 
     lines.append("Manual execution only. Use hard stops.")
@@ -280,6 +286,10 @@ def main() -> None:
 
     all_tickets.sort(key=lambda x: (x["label"] != "portfolio", -x["score"]))
     report = build_report(all_tickets[:MAX_ORDERS], no_action, bench)
+    reports_dir = Path(__file__).resolve().parent.parent / "reports"
+    reports_dir.mkdir(parents=True, exist_ok=True)
+    date_key = datetime.now(ZoneInfo("America/Chicago")).strftime("%Y%m%d")
+    (reports_dir / f"trade_tickets_{date_key}.md").write_text(report, encoding="utf-8")
     _send(report)
 
 
