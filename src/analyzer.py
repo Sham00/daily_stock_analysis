@@ -147,6 +147,22 @@ def _safe_float(v: Any, default: float = 0.0) -> float:
         return default
 
 
+def _safe_int(v: Any, default: int = 50) -> int:
+    """Safely convert to int; return default on failure. Handles numeric strings like '75%'."""
+    if v is None:
+        return default
+    if isinstance(v, int):
+        return v
+    if isinstance(v, float):
+        return int(v)
+    if isinstance(v, str):
+        import re as _re
+        m = _re.search(r'-?\d+', v)
+        if m:
+            return int(m.group())
+    return default
+
+
 def _derive_chip_health(profit_ratio: float, concentration_90: float, language: str = "zh") -> str:
     """Derive chip_health from profit_ratio and concentration_90."""
     if profit_ratio >= 0.9:
@@ -1558,7 +1574,7 @@ class GeminiAnalyzer:
                     code=code,
                     name=name,
                     # 核心指标
-                    sentiment_score=int(data.get('sentiment_score', 50)),
+                    sentiment_score=_safe_int(data.get('sentiment_score', 50), default=50),
                     trend_prediction=data.get('trend_prediction', 'Sideways' if report_language == "en" else '震荡'),
                     operation_advice=data.get('operation_advice', 'Hold' if report_language == "en" else '持有'),
                     decision_type=decision_type,

@@ -12,6 +12,8 @@ A股自选股智能分析系统 - 核心分析流水线
 """
 
 import logging
+import os
+import threading
 import time
 import uuid
 from collections import defaultdict
@@ -72,7 +74,8 @@ class StockAnalysisPipeline:
             max_workers: 最大并发线程数（可选，默认从配置读取）
         """
         self.config = config or get_config()
-        self.max_workers = max_workers or self.config.max_workers
+        _requested_workers = max_workers or self.config.max_workers
+        self.max_workers = min(_requested_workers, max(os.cpu_count() or 4, 4) * 4)
         self.source_message = source_message
         self.query_id = query_id
         self.query_source = self._resolve_query_source(query_source)
@@ -87,6 +90,7 @@ class StockAnalysisPipeline:
         self.trend_analyzer = StockTrendAnalyzer()  # 趋势分析器
         # 实时行情 last-known-good 缓存：{code: (quote, ts)}
         self._realtime_quote_cache: Dict[str, Any] = {}
+        self._realtime_quote_cache_lock = threading.Lock()
         self.analyzer = GeminiAnalyzer()
         self.notifier = NotificationService(source_message=source_message)
         
@@ -228,8 +232,9 @@ class StockAnalysisPipeline:
                     # Succeeded without exception but returned None — check cache
                     pass
                 if realtime_quote is not None:
-                    # Store last-known-good
-                    self._realtime_quote_cache[code] = (realtime_quote, time.time())
+                    # Store last-known-good (lock protects concurrent reads/writes from thread pool)
+                    with self._realtime_quote_cache_lock:
+                        self._realtime_quote_cache[code] = (realtime_quote, time.time())
                     # 使用实时行情返回的真实股票名称
                     if realtime_quote.name:
                         stock_name = realtime_quote.name
@@ -241,7 +246,8 @@ class StockAnalysisPipeline:
                               f"(来源: {realtime_quote.source.value if hasattr(realtime_quote, 'source') else 'unknown'})")
                 else:
                     # Try 60s cache fallback
-                    cached = self._realtime_quote_cache.get(code)
+                    with self._realtime_quote_cache_lock:
+                        cached = self._realtime_quote_cache.get(code)
                     if cached is not None:
                         cached_quote, cached_ts = cached
                         if time.time() - cached_ts <= _REALTIME_CACHE_TTL:

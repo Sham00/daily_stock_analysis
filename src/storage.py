@@ -724,12 +724,7 @@ class DatabaseManager:
                 "DatabaseManager 未正确初始化。"
                 "请确保通过 DatabaseManager.get_instance() 获取实例。"
             )
-        session = self._SessionLocal()
-        try:
-            return session
-        except Exception:
-            session.close()
-            raise
+        return self._SessionLocal()
 
     @contextmanager
     def session_scope(self):
