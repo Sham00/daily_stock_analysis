@@ -14,7 +14,7 @@ import requests
 REPORTS_DIR = Path(__file__).resolve().parent.parent / "reports"
 BASE_URL = "https://api.x.com/2/tweets/search/recent"
 TIMEOUT = 20
-DEFAULT_PORTFOLIO = "MSTR,B,FCX,AGMRF,CSCCF,BTC-USD"
+DEFAULT_PORTFOLIO = "FANG,CNQ"
 DEFAULT_MACRO_QUERY = '(FOMC OR CPI OR PPI OR NFP OR yields OR treasury OR tariffs OR semis OR bitcoin) lang:en -is:retweet'
 
 

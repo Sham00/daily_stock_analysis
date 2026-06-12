@@ -23,15 +23,9 @@ import yfinance as yf
 
 # ── defaults ──────────────────────────────────────────────────────────────────
 
-DEFAULT_PORTFOLIO = "MSTR,B,FCX,AGMRF,CSCCF,BTC-USD"
+DEFAULT_PORTFOLIO = "FANG,CNQ"
 
-DEFAULT_WILDCARDS = (
-    "AMD,AVGO,ARM,ANET,DELL,VRT,SMCI,PWR,ETN,"
-    "DLR,AMT,CEG,VST,NRG,NEE,GEV,"
-    "MARA,RIOT,CLSK,IREN,HUT,CORZ,"
-    "NEM,MP,WPM,"
-    "ET,TRGP,DVN,OXY,FANG"
-)
+DEFAULT_WILDCARDS = ""
 
 
 def _csv(env_key: str, default: str) -> list[str]:
@@ -71,7 +65,7 @@ def _score(close: pd.Series) -> float:
 def main() -> None:
     portfolio = _csv("PORTFOLIO", DEFAULT_PORTFOLIO)
     wildcards = [t for t in _csv("WILDCARD_UNIVERSE", DEFAULT_WILDCARDS) if t not in set(portfolio)]
-    wildcard_count = int(os.getenv("WILDCARD_COUNT", "3"))
+    wildcard_count = int(os.getenv("WILDCARD_COUNT", "0"))
 
     scored: list[tuple[str, float]] = []
     for ticker in wildcards:

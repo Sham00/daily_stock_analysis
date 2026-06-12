@@ -63,9 +63,9 @@ jobs:
 
       - name: Prescan wildcard universe and build dynamic STOCK_LIST
         env:
-          PORTFOLIO: "MSTR,B,FCX,AGMRF,CSCCF,BTC-USD"
-          WILDCARD_UNIVERSE: "AMD,AVGO,ARM,ANET,DELL,VRT,SMCI,PWR,ETN,DLR,AMT,CEG,VST,NRG,NEE,GEV,MARA,RIOT,CLSK,IREN,HUT,CORZ,NEM,MP,WPM,ET,TRGP,DVN,OXY,FANG"
-          WILDCARD_COUNT: "3"
+          PORTFOLIO: "FANG,CNQ"
+          WILDCARD_UNIVERSE: ""
+          WILDCARD_COUNT: "0"
         run: |
           DYNAMIC_LIST=$(python scripts/prescan.py)
           echo "STOCK_LIST=$DYNAMIC_LIST" >> $GITHUB_ENV
@@ -287,7 +287,7 @@ jobs:
       - name: Build X market intel (optional)
         if: always()
         env:
-          PORTFOLIO: "MSTR,B,FCX,AGMRF,CSCCF,BTC-USD"
+          PORTFOLIO: "FANG,CNQ"
           X_API_BEARER_TOKEN: ${{ secrets.X_API_BEARER_TOKEN }}
           X_API_MACRO_QUERY: ${{ vars.X_API_MACRO_QUERY || secrets.X_API_MACRO_QUERY || '(FOMC OR CPI OR PPI OR NFP OR yields OR treasury OR tariffs OR semis OR bitcoin) lang:en -is:retweet' }}
           X_API_PORTFOLIO_LIMIT: ${{ vars.X_API_PORTFOLIO_LIMIT || secrets.X_API_PORTFOLIO_LIMIT || '4' }}
@@ -302,9 +302,9 @@ jobs:
       - name: Send trade tickets to Telegram
         if: always()
         env:
-          PORTFOLIO: "MSTR,B,FCX,AGMRF,CSCCF,BTC-USD"
-          WILDCARD_UNIVERSE: "AMD,AVGO,ARM,ANET,DELL,VRT,SMCI,PWR,ETN,DLR,AMT,CEG,VST,NRG,NEE,GEV,MARA,RIOT,CLSK,IREN,HUT,CORZ,NEM,MP,WPM,ET,TRGP,DVN,OXY,FANG"
-          WILDCARD_COUNT: "3"
+          PORTFOLIO: "FANG,CNQ"
+          WILDCARD_UNIVERSE: ""
+          WILDCARD_COUNT: "0"
           PORTFOLIO_VALUE: "100000"
           RISK_PER_TRADE_PCT: "0.5"
           MAX_POSITION_PCT: "5.0"

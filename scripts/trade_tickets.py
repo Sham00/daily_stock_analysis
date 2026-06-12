@@ -30,21 +30,15 @@ from zoneinfo import ZoneInfo
 
 # ── config ────────────────────────────────────────────────────────────────────
 
-DEFAULT_PORTFOLIO = "MSTR,B,FCX,AGMRF,CSCCF,BTC-USD"
-DEFAULT_WILDCARDS = (
-    "AMD,AVGO,ARM,ANET,DELL,VRT,SMCI,PWR,ETN,"
-    "DLR,AMT,CEG,VST,NRG,NEE,GEV,"
-    "MARA,RIOT,CLSK,IREN,HUT,CORZ,"
-    "NEM,MP,WPM,"
-    "ET,TRGP,DVN,OXY,FANG"
-)
+DEFAULT_PORTFOLIO = "FANG,CNQ"
+DEFAULT_WILDCARDS = ""
 
 MIN_RSI = 50
 MAX_RSI = 78
 MAX_BREAKOUT_GAP = 0.03
 MIN_RR = 1.5
 MAX_ORDERS = 3
-WILDCARD_COUNT = int(os.getenv("WILDCARD_COUNT", "3"))
+WILDCARD_COUNT = int(os.getenv("WILDCARD_COUNT", "0"))
 PORTFOLIO_VALUE = float(os.getenv("PORTFOLIO_VALUE", "100000"))
 RISK_PCT = float(os.getenv("RISK_PER_TRADE_PCT", "0.5"))
 MAX_POS_PCT = float(os.getenv("MAX_POSITION_PCT", "5.0"))
