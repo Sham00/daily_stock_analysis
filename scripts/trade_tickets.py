@@ -151,53 +151,49 @@ def _ticket(ticker: str, d: dict, score: float, reasons: list[str], label: str) 
 # ── format ────────────────────────────────────────────────────────────────────
 
 def _fmt_ticket(t: dict, idx: int) -> str:
-    tag = f" [{t['label']}]" if t["label"] != "portfolio" else ""
     return (
-        f"TOP TRADE {idx}{tag}\n"
-        f"- Buy {t['ticker']}\n"
-        f"- Entry: {t['entry_low']:.2f} to {t['entry_high']:.2f}\n"
-        f"- Stop: {t['stop']:.2f}\n"
-        f"- Target: {t['target_1']:.2f} / {t['target_2']:.2f}\n"
-        f"- Size: {t['size_pct']:.2f}% of portfolio\n"
-        f"- Confidence: {t['confidence']}/10\n"
-        f"- Thesis: {t['thesis']}\n"
-        f"- Invalidation: {t['invalidation']}\n"
-        f"- Risk/Reward: {t['rr1']:.2f} / {t['rr2']:.2f}"
+        f"{idx}) {t['ticker']} — BUY SETUP\n"
+        f"Entry: {t['entry_low']:.2f}–{t['entry_high']:.2f} | Stop: {t['stop']:.2f}\n"
+        f"Targets: {t['target_1']:.2f} / {t['target_2']:.2f} | R/R: {t['rr1']:.1f}x / {t['rr2']:.1f}x\n"
+        f"Size: {t['size_pct']:.1f}% | Confidence: {t['confidence']}/10\n"
+        f"Why: {t['thesis']}\n"
+        f"Invalid if: {t['invalidation']}"
     )
 
 
+def _clean_reason(reason: str) -> str:
+    return reason.replace("SMA20", "20-day MA").replace("SMA50", "50-day MA")
+
+
 def build_report(tickets: list[dict], no_action: list[str], bench: list[str]) -> str:
-    ts = datetime.now(ZoneInfo("America/Chicago")).strftime("%Y-%m-%d %H:%M %Z")
+    ts = datetime.now(ZoneInfo("America/Chicago")).strftime("%b %-d, %-I:%M %p CT")
     report_page_url = os.getenv("REPORT_PAGE_URL", "").strip()
     lines = [
-        f"── TRADE TICKETS | {ts} ──",
-        f"Portfolio: ${PORTFOLIO_VALUE:,.0f} | Risk/trade: {RISK_PCT:.2f}% | Max size: {MAX_POS_PCT:.2f}%",
+        f"Trade check — {ts}",
+        f"Watchlist: FANG, CNQ | Risk/trade: {RISK_PCT:.2f}% | Max size: {MAX_POS_PCT:.1f}%",
         "",
     ]
     if tickets:
-        lines.append("NEW ORDERS")
+        lines.append("Actionable setups")
         for i, t in enumerate(tickets, 1):
             lines.append(_fmt_ticket(t, i))
             lines.append("")
     else:
-        lines.append("NEW ORDERS\n- No qualified setups today\n")
+        lines.append("Actionable setups")
+        lines.append("None today. No forced trades.")
+        lines.append("")
 
-    lines.append("NO ACTION (portfolio)")
-    for name in no_action[:8]:
-        lines.append(f"- {name}")
-    lines.append("")
-
-    if bench:
-        lines.append("WILDCARD BENCH")
-        for name in bench[:5]:
-            lines.append(f"- {name}")
+    if no_action:
+        lines.append("Watch / no action")
+        for name in no_action[:8]:
+            lines.append(f"- {_clean_reason(name)}")
         lines.append("")
 
     if report_page_url:
-        lines.append(f"FULL REPORT: {report_page_url}")
+        lines.append(f"Full report: {report_page_url}")
         lines.append("")
 
-    lines.append("Manual execution only. Use hard stops.")
+    lines.append("Not financial advice. Manual execution only; use hard stops.")
     return "\n".join(lines).strip()
 
 
@@ -250,33 +246,34 @@ def main() -> None:
         else:
             no_action.append(f"{ticker}: R/R below threshold")
 
-    print("[trade_tickets] Prescanning wildcards...", file=sys.stderr)
-    wc_scored: list[tuple[str, float, dict, list[str]]] = []
-    for ticker in wildcards:
-        d = _fetch(ticker)
-        if d is None:
-            continue
-        score, reasons = _score(d)
-        ok, _ = _qualifies(d)
-        if ok:
-            wc_scored.append((ticker, score, d, reasons))
-    wc_scored.sort(key=lambda x: x[1], reverse=True)
-
     bench: list[str] = []
-    promoted = 0
-    for ticker, score, d, reasons in wc_scored:
-        if len(all_tickets) >= MAX_ORDERS:
-            bench.append(f"{ticker}: score {score:.0f}")
-            continue
-        if promoted < WILDCARD_COUNT:
-            t = _ticket(ticker, d, score, reasons, "wildcard")
-            if t["rr1"] >= MIN_RR:
-                all_tickets.append(t)
-                promoted += 1
+    if wildcards and WILDCARD_COUNT > 0:
+        print("[trade_tickets] Prescanning wildcards...", file=sys.stderr)
+        wc_scored: list[tuple[str, float, dict, list[str]]] = []
+        for ticker in wildcards:
+            d = _fetch(ticker)
+            if d is None:
+                continue
+            score, reasons = _score(d)
+            ok, _ = _qualifies(d)
+            if ok:
+                wc_scored.append((ticker, score, d, reasons))
+        wc_scored.sort(key=lambda x: x[1], reverse=True)
+
+        promoted = 0
+        for ticker, score, d, reasons in wc_scored:
+            if len(all_tickets) >= MAX_ORDERS:
+                bench.append(f"{ticker}: score {score:.0f}")
+                continue
+            if promoted < WILDCARD_COUNT:
+                t = _ticket(ticker, d, score, reasons, "wildcard")
+                if t["rr1"] >= MIN_RR:
+                    all_tickets.append(t)
+                    promoted += 1
+                else:
+                    bench.append(f"{ticker}: R/R below threshold")
             else:
-                bench.append(f"{ticker}: R/R below threshold")
-        else:
-            bench.append(f"{ticker}: score {score:.0f}")
+                bench.append(f"{ticker}: score {score:.0f}")
 
     all_tickets.sort(key=lambda x: (x["label"] != "portfolio", -x["score"]))
     report = build_report(all_tickets[:MAX_ORDERS], no_action, bench)
